@@ -13,9 +13,12 @@
 @interface OClusterMapView_SampleViewController : UIViewController <MKMapViewDelegate> {
     OCMapView *mapView;
     IBOutlet UILabel *labelNumberOfAnnotations;
+    
+    CLLocationCoordinate2D temporaryCenterCoordinate;
+    CLLocationCoordinate2D temporarySideCoordinate;
 }
 
-@property (nonatomic, retain) IBOutlet OCMapView *mapView;
+@property (nonatomic, strong) IBOutlet OCMapView *mapView;
 - (IBAction)removeButtonTouchUpInside:(id)sender;
 - (IBAction)addButtonTouchUpInside:(id)sender;
 - (IBAction)clusteringButtonTouchUpInside:(UIButton *)sender;

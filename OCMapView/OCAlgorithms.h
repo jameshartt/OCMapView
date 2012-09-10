@@ -36,7 +36,7 @@ typedef enum {
  More algorithms are planned for future releases of OCMapView.
  
  Note for OCMapView developers:
- Every algorithm has to be a class method which returns an array of OCAnnotations or a subclass of it. 
+ Every algorithm has to be a class method which returns an array of OCClusteredAnnotations or a subclass of it. 
  OR for future releases
  They can be instance methods if they run asynchronously. The instance holder needs to implement the delegate protocol and the method needs to call the delegate.
  */
@@ -52,10 +52,11 @@ typedef enum {
  between single annotations.
  
  @param annotationsToCluster contains the Annotations that should be clustered
+ @param clusteredAnnotations contains the Annotations that are already clustered and there information could be used again, for animations
  @param radius represents the cluster size. 
  
  It iterates through all annotations in the array and compare their distances. If they are near engough, they will be clustered.*/
-+ (NSArray*) bubbleClusteringWithAnnotations:(NSArray *) annotationsToCluster andClusterRadius:(CLLocationDistance)radius grouped:(BOOL) grouped;
++ (NSArray*) bubbleClusteringWithAnnotations:(NSArray *) annotationsToCluster alreadyClusteredAnnotations:(NSArray*) clusteredAnnotations andClusterRadius:(CLLocationDistance)radius grouped:(BOOL) grouped;
 
 
 
@@ -63,9 +64,19 @@ typedef enum {
 /** This algorithm creates clusters based on a defined grid.
  
  @param annotationsToCluster contains the Annotations that should be clustered
+ @param clusteredAnnotations contains the Annotations that are already clustered and there information could be used again, for animations
  @param tileRect represents the size of a grid tile. 
  
  It iterates through all annotations in the array and puts them into a grid tile based on their location.*/
-+ (NSArray*) gridClusteringWithAnnotations:(NSArray *) annotationsToCluster andClusterRect:(MKCoordinateSpan)tileRect grouped:(BOOL) grouped;
++ (NSArray*) gridClusteringWithAnnotations:(NSArray *) annotationsToCluster alreadyClusteredAnnotations:(NSArray*) clusteredAnnotations andClusterRect:(MKCoordinateSpan)tileRect grouped:(BOOL) grouped;
+
+
+// Localized String, checking if Metric or Not.
+/** This conviences method allows those silly people stuck in the past to have miles instead of km, based on there localized info.
+ 
+ @param kilometeres, to make localized string from.
+ 
+ We like.*/
++ (NSString*) localizedDistanceStringFromKilometers:(CLLocationDistance)kilometers lessThanKilometerAccuracy:(BOOL)lessThanKilometerAccuracy;
 
 @end

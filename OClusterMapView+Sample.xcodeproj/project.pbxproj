@@ -38,6 +38,8 @@
 		88F58CF414E9C6960007E6FA /* oranges@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 88F58CEC14E9C6960007E6FA /* oranges@2x.png */; };
 		88F58CFC14E9CE520007E6FA /* regular.png in Resources */ = {isa = PBXBuildFile; fileRef = 88F58CFA14E9CE520007E6FA /* regular.png */; };
 		88F58CFD14E9CE520007E6FA /* regular@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 88F58CFB14E9CE520007E6FA /* regular@2x.png */; };
+		DAB61E3415FDFAC8001C83BE /* OCAnnotationView.m in Sources */ = {isa = PBXBuildFile; fileRef = DAB61E3115FDFAC8001C83BE /* OCAnnotationView.m */; };
+		DAB61E3515FDFAC8001C83BE /* OCClusteredAnnotation.m in Sources */ = {isa = PBXBuildFile; fileRef = DAB61E3315FDFAC8001C83BE /* OCClusteredAnnotation.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -83,6 +85,10 @@
 		88F58CEC14E9C6960007E6FA /* oranges@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "oranges@2x.png"; sourceTree = "<group>"; };
 		88F58CFA14E9CE520007E6FA /* regular.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = regular.png; sourceTree = "<group>"; };
 		88F58CFB14E9CE520007E6FA /* regular@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "regular@2x.png"; sourceTree = "<group>"; };
+		DAB61E3015FDFAC8001C83BE /* OCAnnotationView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OCAnnotationView.h; sourceTree = "<group>"; };
+		DAB61E3115FDFAC8001C83BE /* OCAnnotationView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCAnnotationView.m; sourceTree = "<group>"; };
+		DAB61E3215FDFAC8001C83BE /* OCClusteredAnnotation.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OCClusteredAnnotation.h; sourceTree = "<group>"; };
+		DAB61E3315FDFAC8001C83BE /* OCClusteredAnnotation.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OCClusteredAnnotation.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -167,6 +173,10 @@
 		88098267142FC02A002AD1BD /* OCMapView */ = {
 			isa = PBXGroup;
 			children = (
+				DAB61E3015FDFAC8001C83BE /* OCAnnotationView.h */,
+				DAB61E3115FDFAC8001C83BE /* OCAnnotationView.m */,
+				DAB61E3215FDFAC8001C83BE /* OCClusteredAnnotation.h */,
+				DAB61E3315FDFAC8001C83BE /* OCClusteredAnnotation.m */,
 				88098268142FC02A002AD1BD /* OCAlgorithms.h */,
 				88098269142FC02A002AD1BD /* OCAlgorithms.m */,
 				8809826A142FC02A002AD1BD /* OCAnnotation.h */,
@@ -283,6 +293,8 @@
 				88098272142FC02A002AD1BD /* OCDistance.m in Sources */,
 				88098273142FC02A002AD1BD /* OCMapView.m in Sources */,
 				88098276142FC058002AD1BD /* OCMapViewSampleHelpAnnotation.m in Sources */,
+				DAB61E3415FDFAC8001C83BE /* OCAnnotationView.m in Sources */,
+				DAB61E3515FDFAC8001C83BE /* OCClusteredAnnotation.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -384,6 +396,7 @@
 		8809825D142FBF04002AD1BD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_ENABLE_OBJC_ARC = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "OClusterMapView+Sample/OClusterMapView+Sample-Prefix.pch";
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
@@ -398,6 +411,7 @@
 		8809825E142FBF04002AD1BD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_ENABLE_OBJC_ARC = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "OClusterMapView+Sample/OClusterMapView+Sample-Prefix.pch";
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;

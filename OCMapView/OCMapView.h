@@ -8,10 +8,13 @@
 #import <UIKit/UIKit.h>
 #import <MapKit/MapKit.h>
 #import "OCDistance.h"
-#import "OCAnnotation.h"
+#import "OCClusteredAnnotation.h"
 #import "OCAlgorithms.h"
+#import "OCAnnotationView.h"
 
 #import <dispatch/dispatch.h>
+
+@class MKAnnotationContainerView;
 
 /// MapView which should be used instead of MKMapView
 /** OCMapView works like the standard MKMapView but creates clusters form its containing Annotations.*/
@@ -30,6 +33,8 @@
     
     // Backround Clustering
     dispatch_queue_t backgroundClusterQueue;
+    
+    MKAnnotationContainerView *annotationContainerView;
 }
 
 // ======================================
@@ -58,19 +63,19 @@
 //
 /// The complete list of annotations associated with the receiver. (read-only)
 /** The objects in this array must adopt the @see MKAnnotation protocol. If no annotations are associated with the map view, the value of this property is nil.*/
-@property(nonatomic, readonly) NSArray *annotations;
+@property(unsafe_unretained, nonatomic, readonly) NSArray *annotations;
 - (NSArray *)annotations;
 
 //
 /// List of annotations which will be ignored by the clustering algorithm.
 /** The objects in this array must adopt the @see MKAnnotation protocol.
  The clustering algorithms will automatically ignore this annotations.*/
-@property(nonatomic, retain) NSMutableSet *annotationsToIgnore;
+@property(nonatomic, strong) NSMutableSet *annotationsToIgnore;
 
 //
 /// The complete list of annotations displayed on the map including clusters (read-only).
 /** The objects in this array must adopt the @see MKAnnotation protocol. It contains all annotations as they are on the MapView.*/
-@property(nonatomic, readonly) NSArray *displayedAnnotations;
+@property(unsafe_unretained, nonatomic, readonly) NSArray *displayedAnnotations;
 - (NSArray *)displayedAnnotations;
 
 //
@@ -116,6 +121,8 @@ default: 0.2*/
  Handles the ignoreList of annotations, calls the defined clustering algorithm and adds the clustered annotations to the map.
  */
 - (void)doClustering;
+- (void)doClusteringZoomIn;
+- (void)doClusteringZoomOut;
 
 // ======================================
 // Help Methods

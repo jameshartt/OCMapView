@@ -7,13 +7,17 @@
 //
 
 #import "OClusterMapView_SampleViewController.h"
-#import "OCMapViewSampleHelpAnnotation.h"
+#import "OCAnnotation.h"
 #import <math.h>
 
 #define ARC4RANDOM_MAX 0x100000000
 #define kTYPE1 @"Banana"
 #define kTYPE2 @"Orange"
 #define kDEFAULTCLUSTERSIZE 0.2
+
+#define ZOOM_OUT_THRESHOLD 1.1
+#define ZOOM_IN_THRESHOLD 1.5
+#define PAN_THRESHOLD 0.75
 
 @implementation OClusterMapView_SampleViewController
 
@@ -86,26 +90,16 @@
     NSMutableSet *annotationsToAdd = [[NSMutableSet alloc] init];
     
     for (CLLocation *loc in randomLocations) {
-        OCMapViewSampleHelpAnnotation *annotation = [[OCMapViewSampleHelpAnnotation alloc] initWithCoordinate:loc.coordinate];
+        
+        OCAnnotation *annotation = [[OCAnnotation alloc] initWithPost:[self createRandomPostWithCoordinate:loc.coordinate] latitude:[NSNumber numberWithDouble:loc.coordinate.latitude] longitude:[NSNumber numberWithDouble:loc.coordinate.longitude]];
         [annotationsToAdd addObject:annotation];
         
-        // add to group if specified
-        if (annotationsToAdd.count < (randomLocations.count)/2) {
-            annotation.groupTag = kTYPE1;
-        }
-        else{
-            annotation.groupTag = kTYPE2;
-        }
-        
-        [annotation release];
     }
     
     [mapView addAnnotations:[annotationsToAdd allObjects]];
     labelNumberOfAnnotations.text = [NSString stringWithFormat:@"Number of Annotations: %d", [mapView.annotations count]];
     
     // clean
-    [randomLocations release];
-    [annotationsToAdd release];
 }
 
 - (IBAction)clusteringButtonTouchUpInside:(UIButton *)sender {
@@ -128,14 +122,12 @@
     [mapView removeOverlays:mapView.overlays];
     NSArray *randomLocations = [[NSArray alloc] initWithArray:[self randomCoordinatesGenerator:1]];
     CLLocationCoordinate2D loc = ((CLLocation *)[randomLocations objectAtIndex:0]).coordinate;
-    OCMapViewSampleHelpAnnotation *annotation = [[OCMapViewSampleHelpAnnotation alloc] initWithCoordinate:loc];
+    OCAnnotation *annotation = [[OCAnnotation alloc] initWithPost:[self createRandomPostWithCoordinate:loc] latitude:[NSNumber numberWithDouble:loc.latitude] longitude:[NSNumber numberWithDouble:loc.longitude]];
     
     [mapView addAnnotation:annotation];
     labelNumberOfAnnotations.text = [NSString stringWithFormat:@"Number of Annotations: %d", [mapView.annotations count]];
     
     // clean
-    [randomLocations release];
-    [annotation release];
 }
 
 - (IBAction)changeClusterMethodButtonTouchUpInside:(UIButton *)sender {    
@@ -158,7 +150,6 @@
 - (IBAction)infoButtonTouchUpInside:(UIButton *)sender{
     UIAlertView *a = [[UIAlertView alloc] initWithTitle:@"Info" message:@"The size of a cluster-annotation represents the number of annotations it contains and not its size." delegate:nil cancelButtonTitle:@"great!" otherButtonTitles:nil];
     [a show];
-    [a release];
 }
 
 - (IBAction)buttonGroupByTagTouchUpInside:(UIButton *)sender {
@@ -179,81 +170,66 @@
 // ==============================
 #pragma mark - map delegate
 - (MKAnnotationView *)mapView:(MKMapView *)aMapView viewForAnnotation:(id <MKAnnotation>)annotation{
-    MKAnnotationView *annotationView;
+    // if it's the user location, just return nil.
+    if ([annotation isKindOfClass:[MKUserLocation class]])
+        return nil;
     
-    // if it's a cluster
-    if ([annotation isKindOfClass:[OCAnnotation class]]) {
+    if ([annotation isKindOfClass:[OCAnnotation class]])
+    {
+        OCAnnotation *mapListingAnnotation = (OCAnnotation*)annotation;
         
-        OCAnnotation *clusterAnnotation = (OCAnnotation *)annotation;
+        NSDictionary *post = mapListingAnnotation.post;
+        // if an existing pin view was not available, create one
+        OCAnnotationView* customPinView = (OCAnnotationView*)[mapView dequeueReusableAnnotationViewWithIdentifier:@"pin"];
         
-        annotationView = (MKAnnotationView *)[aMapView dequeueReusableAnnotationViewWithIdentifier:@"ClusterView"];
-        [annotationView retain];
-        if (!annotationView) {
-            annotationView = [[MKAnnotationView alloc] initWithAnnotation:annotation reuseIdentifier:@"ClusterView"];
-            annotationView.canShowCallout = YES;
-            annotationView.centerOffset = CGPointMake(0, -20);
+        NSString *smallImageURI = [[post objectForKey:@"image-uri"] stringByAppendingFormat:@"?w=%.0f&h=%.0f", [[UIScreen mainScreen] scale] * 32, [[UIScreen mainScreen] scale] * 32];
+        
+        if (customPinView==nil) {
+            customPinView = [[OCAnnotationView alloc] initWithAnnotation:annotation reuseIdentifier:@"pin"];
+            UIButton* rightButton = [UIButton buttonWithType:UIButtonTypeDetailDisclosure];
+            [rightButton addTarget:self
+                            action:@selector(showDetails:)
+                  forControlEvents:UIControlEventTouchUpInside];
+            customPinView.rightCalloutAccessoryView = rightButton;
+            customPinView.canShowCallout = YES;
+         }
+        
+        
+            customPinView.image = [UIImage imageNamed:@"banana.png"];
+        
+        return customPinView;
+        
+    } else if ([annotation isKindOfClass:[OCClusteredAnnotation class]]) {
+        OCClusteredAnnotation *clusterAnnotation = (OCClusteredAnnotation*)annotation;
+        OCAnnotation *mapListingAnnotation = (OCAnnotation*)[clusterAnnotation.annotationsInCluster objectAtIndex:0];
+        if ([mapListingAnnotation isKindOfClass:[MKUserLocation class]] && [clusterAnnotation.annotationsInCluster count]>1) {
+            mapListingAnnotation = [clusterAnnotation.annotationsInCluster objectAtIndex:1];
         }
-        //calculate cluster region
-        //CLLocationDistance clusterRadius = mapView.region.span.longitudeDelta * mapView.clusterSize * 111000; //static circle size of cluster
-        CLLocationDistance clusterRadius = mapView.region.span.longitudeDelta/log(mapView.region.span.longitudeDelta*mapView.region.span.longitudeDelta) * log(pow([clusterAnnotation.annotationsInCluster count], 4)) * mapView.clusterSize * 50000; //circle size based on number of annotations in cluster
+        NSDictionary *item = mapListingAnnotation.post;
+        NSString *title = [item objectForKey:@"location-name"];
+        NSString *numberOfItemsSubtitle = [NSString stringWithFormat:@"Number of Items: %d", [clusterAnnotation.annotationsInCluster count]];
         
-        MKCircle *circle = [MKCircle circleWithCenterCoordinate:clusterAnnotation.coordinate radius:clusterRadius * cos([annotation coordinate].latitude * M_PI / 180.0)];
-        [circle setTitle:@"background"];
-        [mapView addOverlay:circle];
+        [clusterAnnotation setTitle:title];
+        [clusterAnnotation setSubtitle:numberOfItemsSubtitle];
         
-        MKCircle *circleLine = [MKCircle circleWithCenterCoordinate:clusterAnnotation.coordinate radius:clusterRadius * cos([annotation coordinate].latitude * M_PI / 180.0)];
-        [circleLine setTitle:@"line"];
-        [mapView addOverlay:circleLine];
+        OCAnnotationView* customPinView = (OCAnnotationView*)[mapView dequeueReusableAnnotationViewWithIdentifier:@"cluster"];
         
-        // set title
-        clusterAnnotation.title = @"Cluster";
-        clusterAnnotation.subtitle = [NSString stringWithFormat:@"Containing annotations: %d", [clusterAnnotation.annotationsInCluster count]];
-        
-        // set its image
-        annotationView.image = [UIImage imageNamed:@"regular.png"];
-        
-        // change pin image for group
-        if (mapView.clusterByGroupTag) {
-            if ([clusterAnnotation.groupTag isEqualToString:kTYPE1]) {
-                annotationView.image = [UIImage imageNamed:@"bananas.png"];
-            }
-            else if([clusterAnnotation.groupTag isEqualToString:kTYPE2]){
-                annotationView.image = [UIImage imageNamed:@"oranges.png"];
-            }
-            clusterAnnotation.title = clusterAnnotation.groupTag;
+        if (customPinView==nil) {
+            customPinView = [[OCAnnotationView alloc] initWithAnnotation:clusterAnnotation reuseIdentifier:@"cluster"];
+            customPinView.canShowCallout = YES;
+                UIButton* rightButton = [UIButton buttonWithType:UIButtonTypeDetailDisclosure];
+                [rightButton addTarget:self
+                                action:@selector(showDetails:)
+                      forControlEvents:UIControlEventTouchUpInside];
+                customPinView.rightCalloutAccessoryView = rightButton;
         }
+        
+        customPinView.image = [UIImage imageNamed:@"bananas.png"];
+
+       
+        return customPinView;
     }
-    // If it's a single annotation
-    else if([annotation isKindOfClass:[OCMapViewSampleHelpAnnotation class]]){
-        OCMapViewSampleHelpAnnotation *singleAnnotation = (OCMapViewSampleHelpAnnotation *)annotation;
-        annotationView = (MKAnnotationView *)[aMapView dequeueReusableAnnotationViewWithIdentifier:@"singleAnnotationView"];
-        [annotationView retain];
-        if (!annotationView) {
-            annotationView = [[MKAnnotationView alloc] initWithAnnotation:singleAnnotation reuseIdentifier:@"singleAnnotationView"];
-            annotationView.canShowCallout = YES;
-            annotationView.centerOffset = CGPointMake(0, -20);
-        }
-        singleAnnotation.title = singleAnnotation.groupTag;
-        
-        if ([singleAnnotation.groupTag isEqualToString:kTYPE1]) {
-            annotationView.image = [UIImage imageNamed:@"banana.png"];
-        }
-        else if([singleAnnotation.groupTag isEqualToString:kTYPE2]){
-            annotationView.image = [UIImage imageNamed:@"orange.png"];
-        }
-    }
-    // Error
-    else{
-        annotationView = (MKPinAnnotationView *)[aMapView dequeueReusableAnnotationViewWithIdentifier:@"errorAnnotationView"];
-        [annotationView retain];
-        if (!annotationView) {
-            annotationView = [[MKPinAnnotationView alloc] initWithAnnotation:annotation reuseIdentifier:@"errorAnnotationView"];
-            annotationView.canShowCallout = NO;
-            ((MKPinAnnotationView *)annotationView).pinColor = MKPinAnnotationColorRed;
-        }
-    }
-    
-    return [annotationView autorelease];
+    return nil;
 }
 
 - (MKOverlayView *)mapView:(MKMapView *)mapView viewForOverlay:(id <MKOverlay>)overlay{
@@ -276,12 +252,83 @@
         circleView.lineWidth = 0.5;
     }
     
-    return [circleView autorelease];
+    return circleView;
 }
 
-- (void)mapView:(MKMapView *)aMapView regionDidChangeAnimated:(BOOL)animated{
-    [mapView removeOverlays:mapView.overlays];
-    [mapView doClustering];
+- (void)mapView:(MKMapView *)mapView regionDidChangeAnimated:(BOOL)animated {
+    [self softUpdateMapView:mapView];
+}
+
+- (void) softUpdateMapView:(OCMapView*)mapView {
+    CGPoint center = mapView.center;
+    CGPoint side = CGPointMake(0, 0);
+    
+    CLLocationCoordinate2D centerCoordinate = [mapView convertPoint:center toCoordinateFromView:mapView];
+    CLLocationCoordinate2D sideCoordinate = [mapView convertPoint:side toCoordinateFromView:mapView];
+    
+    CLLocation *centerLocation = [[CLLocation alloc] initWithLatitude:centerCoordinate.latitude longitude:centerCoordinate.longitude];
+    CLLocation *sideLocation = [[CLLocation alloc] initWithLatitude:sideCoordinate.latitude longitude:sideCoordinate.longitude];
+    CLLocation *temporaryCenterLocation = [[CLLocation alloc] initWithLatitude:temporaryCenterCoordinate.latitude longitude:temporaryCenterCoordinate.longitude];
+    CLLocation *temporarySideLocation = [[CLLocation alloc] initWithLatitude:temporarySideCoordinate.latitude longitude:temporarySideCoordinate.longitude];
+    
+    CLLocationCoordinate2D tempSide = temporarySideCoordinate;
+    CLLocationCoordinate2D tempCenter = temporaryCenterCoordinate;
+    
+    BOOL zoomIn = NO;
+    BOOL zoomOut = NO;
+    BOOL panned = NO;
+    if (temporaryCenterCoordinate.latitude == 0 || temporaryCenterCoordinate.longitude == 0 || temporarySideCoordinate.latitude == 0 || temporarySideCoordinate.longitude == 0) {
+        temporaryCenterCoordinate = centerCoordinate;
+        temporarySideCoordinate = sideCoordinate;
+    }
+    if ([centerLocation distanceFromLocation:sideLocation]/1000 > ZOOM_OUT_THRESHOLD*[temporaryCenterLocation distanceFromLocation:temporarySideLocation]/1000) {
+        temporaryCenterCoordinate = centerCoordinate;
+        temporarySideCoordinate = sideCoordinate;
+        zoomOut = YES;
+    }
+    if ([temporaryCenterLocation distanceFromLocation:temporarySideLocation]/1000 > ZOOM_IN_THRESHOLD*[centerLocation distanceFromLocation:sideLocation]/1000) {
+        temporaryCenterCoordinate = centerCoordinate;
+        temporarySideCoordinate = sideCoordinate;
+        zoomIn = YES;
+    }
+    if (PAN_THRESHOLD*[temporaryCenterLocation distanceFromLocation:temporarySideLocation]/1000 < [temporaryCenterLocation distanceFromLocation:centerLocation]/1000) {
+        temporaryCenterCoordinate = centerCoordinate;
+        temporarySideCoordinate = sideCoordinate;
+        panned = YES;
+    }
+    
+    if (zoomIn==FALSE) {
+        if (zoomOut||panned) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [mapView doClusteringZoomOut];
+            });
+            zoomIn = NO;
+            panned = NO;
+        }
+    }
+    
+    CLLocationDegrees latDelta = mapView.region.span.latitudeDelta;
+    CLLocationDegrees longDelta = mapView.region.span.longitudeDelta;
+    CLLocationDegrees latCenter = mapView.region.center.latitude;
+    CLLocationDegrees longCenter = mapView.region.center.longitude;
+    
+    double delayInSeconds = 0.3;
+    dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, delayInSeconds * NSEC_PER_SEC);
+    dispatch_after(popTime, dispatch_get_main_queue(), ^(void){
+        if (mapView.region.span.latitudeDelta == latDelta &&
+            longDelta == mapView.region.span.longitudeDelta &&
+            latCenter == mapView.region.center.latitude &&
+            longCenter == mapView.region.center.longitude) {
+            if (zoomIn||panned) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [mapView doClusteringZoomIn];
+                });
+            }
+        } else {
+            temporarySideCoordinate = tempSide;
+            temporaryCenterCoordinate = tempCenter;
+        }
+    });
 }
 
 // ==============================
@@ -298,8 +345,8 @@
     for (int i = 0; i < numberOfCoordinates; i++) {
         
         // Get random coordinates
-        CLLocationDistance latitude = ((float)arc4random() / ARC4RANDOM_MAX) * 180.0 - 90.0;    // the latitude goes from +90° - 0 - -90°
-        CLLocationDistance longitude = ((float)arc4random() / ARC4RANDOM_MAX) * 360.0 - 180.0;  // the longitude goes from +180° - 0 - -180°
+        CLLocationDistance latitude = ((float)arc4random() / ARC4RANDOM_MAX) * 1.0f + 51.0f;    // the latitude goes from +90° - 0 - -90°
+        CLLocationDistance longitude = ((float)arc4random() / ARC4RANDOM_MAX) * 1.0f - 0.5f;  // the longitude goes from +180° - 0 - -180°
         
         // This is a fix, because the randomizing above can fail
         latitude = MIN(90.0, latitude);
@@ -311,12 +358,32 @@
         
         CLLocation *loc = [[CLLocation alloc]initWithLatitude:latitude longitude:longitude];
         [coordinates addObject:loc];
-        [loc release];
     }
-    return  [coordinates autorelease];
+    return  coordinates;
 }
 
-- (void)dealloc {
-    [super dealloc];
+//description = "This is a Banana";
+//"geo-location" =     {
+//    lat = "51.035260";
+//    lon = "-0.285737";
+//};
+//"location-name" = Random;
+
+- (NSDictionary *) createRandomPostWithCoordinate:(CLLocationCoordinate2D)coordinate {
+    NSMutableDictionary *randomPost = [NSMutableDictionary dictionary];
+    NSMutableDictionary *location = [NSMutableDictionary dictionary];
+    [location setObject:[NSNumber numberWithDouble:coordinate.latitude] forKey:@"lat"];
+    [location setObject:[NSNumber numberWithDouble:coordinate.longitude] forKey:@"lon"];
+    
+    [randomPost setObject:@"This is a Banana" forKey:@"description"];
+    [randomPost setObject:@"<Location-Name>" forKey:@"location-name"];
+    
+    return randomPost;
 }
+
+
+- (void) showDetails:(id)sender {
+    
+}
+
 @end

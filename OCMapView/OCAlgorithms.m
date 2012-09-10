@@ -6,20 +6,20 @@
 //
 
 #import "OCAlgorithms.h"
+#import "OCClusteredAnnotation.h"
 #import "OCAnnotation.h"
 #import "OCDistance.h"
 #import "OCGrouping.h"
 #import <math.h>
+#include <mach/mach_time.h>
+#include <stdint.h>
 
 @implementation OCAlgorithms
 
 #pragma mark - bubbleClustering
 
 // Bubble clustering with iteration
-+ (NSArray*) bubbleClusteringWithAnnotations:(NSArray *) annotationsToCluster andClusterRadius:(CLLocationDistance)radius grouped:(BOOL) grouped{
-    
-    // memory
-    [annotationsToCluster retain];
++ (NSArray*) bubbleClusteringWithAnnotations:(NSArray *) annotationsToCluster alreadyClusteredAnnotations:(NSArray*) alreadyClusteredAnnotations andClusterRadius:(CLLocationDistance)radius grouped:(BOOL) grouped{
     
     // return array
     NSMutableArray *clusteredAnnotations = [[NSMutableArray alloc] init];
@@ -31,18 +31,17 @@
 		
 		// If it's the first one, add it as new cluster annotation
 		if([clusteredAnnotations count] == 0){
-            OCAnnotation *newCluster = [[OCAnnotation alloc] initWithAnnotation:annotation];
+            //NSLog(@"CREATE NEW FIRST COUNT");
+            OCClusteredAnnotation *newCluster = [[OCClusteredAnnotation alloc] initWithAnnotation:annotation];
             [clusteredAnnotations addObject:newCluster];
             
             // check group
             if (grouped && [annotation respondsToSelector:@selector(groupTag)]) {
                 newCluster.groupTag = ((id <OCGrouping>)annotation).groupTag;
             }
-            
-            [newCluster release];
-		}
+        }
 		else {
-            for (OCAnnotation *clusterAnnotation in clusteredAnnotations) {
+            for (OCClusteredAnnotation *clusterAnnotation in clusteredAnnotations) {
                 // If the annotation is in range of the Cluster add it to it
                 if(isLocationNearToOtherLocation([annotation coordinate], [clusterAnnotation coordinate], radius)){
                     
@@ -60,44 +59,80 @@
             
             // If the annotation is not in a Cluster make it to a new one
 			if (!isContaining){
-				OCAnnotation *newCluster = [[OCAnnotation alloc] initWithAnnotation:annotation];
+                //NSLog(@"CREATE NEW NOT FIRST COUNT");
+				OCClusteredAnnotation *newCluster = [[OCClusteredAnnotation alloc] initWithAnnotation:annotation];
 				[clusteredAnnotations addObject:newCluster];
                 
                 // check group
                 if (grouped && [annotation respondsToSelector:@selector(groupTag)]) {
                     newCluster.groupTag = ((id <OCGrouping>)annotation).groupTag;
                 }
-                
-                [newCluster release];
-			}
+            }
 		}
 	}
     
+    // Create array to return
     NSMutableArray *returnArray = [[NSMutableArray alloc] init];
     
     // whipe all empty or single annotations
-    for (OCAnnotation *anAnnotation in clusteredAnnotations) {
-        if ([anAnnotation.annotationsInCluster count] <= 1) {
-            [returnArray addObject:[anAnnotation.annotationsInCluster lastObject]];
+    for (OCClusteredAnnotation *anAnnotation in clusteredAnnotations) {
+        if ([anAnnotation.annotationsInCluster count] <= 2) {
+            [returnArray addObjectsFromArray:anAnnotation.annotationsInCluster];
         }
         else{
             [returnArray addObject:anAnnotation];
         }
     }
     
-    // memory
-    [annotationsToCluster release];
-    [clusteredAnnotations release];
+    // Create array for clusters to check with already existing clusters
+    NSPredicate *clusterPredicate = [NSPredicate predicateWithFormat:@"self isMemberOfClass: %@",[OCClusteredAnnotation class]];
     
-    return [returnArray autorelease];
+    NSArray *clusters = [returnArray filteredArrayUsingPredicate:clusterPredicate];
+    
+    for (OCClusteredAnnotation *clusterAnnotation in clusters) {
+        CLLocationDegrees averageLat=0;
+        CLLocationDegrees averageLong=0;
+        NSUInteger count = [[clusterAnnotation annotationsInCluster] count];
+        for (id<MKAnnotation> annotation in [clusterAnnotation annotationsInCluster]) {
+            averageLat += annotation.coordinate.latitude;
+            averageLong += annotation.coordinate.longitude;
+        }
+        averageLat /= (double)count;
+        averageLong /= (double)count;
+        for (OCClusteredAnnotation *alreadyClusteredAnnotation in alreadyClusteredAnnotations) {
+            if (isLocationNearToOtherLocation(clusterAnnotation.coordinate, alreadyClusteredAnnotation.coordinate, radius/100)) {
+
+                if (!isLocationNearToOtherLocation(alreadyClusteredAnnotation.coordinate, CLLocationCoordinate2DMake(averageLat, averageLong), 0.0005)) {
+                    [alreadyClusteredAnnotation setMoveToCoordinate:CLLocationCoordinate2DMake(averageLat, averageLong)];
+                } else {
+                    [alreadyClusteredAnnotation setMoveToCoordinate:CLLocationCoordinate2DMake(0, 0)];
+                }
+                NSUInteger replaceIndex = [returnArray indexOfObject:clusterAnnotation];
+                if (replaceIndex == NSNotFound || [alreadyClusteredAnnotation isMemberOfClass:[MKUserLocation class]]) {
+                    continue;
+                }
+                [returnArray replaceObjectAtIndex:replaceIndex withObject:alreadyClusteredAnnotation];
+                [alreadyClusteredAnnotation setAnnotationsInCluster:[clusterAnnotation annotationsInCluster]];
+                NSString *numberOfItemsSubtitle = [NSString stringWithFormat:@"Number of Items:%d", count];
+                //[alreadyClusteredAnnotation willChangeValueForKey:@"subtitle"];
+                [alreadyClusteredAnnotation setSubtitle:numberOfItemsSubtitle];
+                //[alreadyClusteredAnnotation didChangeValueForKey:@"subtitle"];
+                NSDictionary *item = [(OCAnnotation*)[alreadyClusteredAnnotation.annotationsInCluster objectAtIndex:rand()%count] post];
+                NSString *title = [item objectForKey:@"location-name"];
+                //[alreadyClusteredAnnotation willChangeValueForKey:@"title"];
+                [alreadyClusteredAnnotation setTitle:title];
+                //[alreadyClusteredAnnotation didChangeValueForKey:@"title"];
+                break;
+            }
+        }
+        [clusterAnnotation setCoordinate:CLLocationCoordinate2DMake(averageLat, averageLong)];
+    }    
+    return returnArray;
 }
 
 
 // Grid clustering with predefined size
-+ (NSArray*) gridClusteringWithAnnotations:(NSArray *) annotationsToCluster andClusterRect:(MKCoordinateSpan)tileRect grouped:(BOOL) grouped{
-    
-    // memory
-    [annotationsToCluster retain];
++ (NSArray*) gridClusteringWithAnnotations:(NSArray *) annotationsToCluster alreadyClusteredAnnotations:(NSArray*)alreadyClusteredAnnotations andClusterRect:(MKCoordinateSpan)tileRect grouped:(BOOL) grouped{
     
     // return array
     NSMutableDictionary *clusteredAnnotations = [[NSMutableDictionary alloc] init];
@@ -113,11 +148,11 @@
         
         
         // get the cluster for the calculated coordinates
-        OCAnnotation *clusterAnnotation = [[clusteredAnnotations objectForKey:key] retain];
+        OCClusteredAnnotation *clusterAnnotation = [clusteredAnnotations objectForKey:key];
         
         // if there is none, create one
         if (clusterAnnotation == nil) {
-            clusterAnnotation = [[OCAnnotation alloc] init];
+            clusterAnnotation = [[OCClusteredAnnotation alloc] init];
             
             CLLocationDegrees lon = row * tileRect.longitudeDelta + tileRect.longitudeDelta/2.0 - 180.0;
             CLLocationDegrees lat = (column * tileRect.latitudeDelta) + tileRect.latitudeDelta/2.0 - 90.0;
@@ -133,22 +168,19 @@
         
         // check group
         if (grouped && [annotation respondsToSelector:@selector(groupTag)]) {
-            if (![clusterAnnotation.groupTag isEqualToString:((id <OCGrouping>)annotation).groupTag]){
-                [clusterAnnotation release];
+            if (![clusterAnnotation.groupTag isEqualToString:((id <OCGrouping>)annotation).groupTag])
                 continue;
-            }
         }
         
         // add annotation to the cluster
         [clusterAnnotation addAnnotation:annotation];
-        [clusterAnnotation release];
 	}
     
     // return array
     NSMutableArray *returnArray = [[NSMutableArray alloc] init];
     
     // whipe all empty or single annotations
-    for (OCAnnotation *anAnnotation in [clusteredAnnotations allValues]) {
+    for (OCClusteredAnnotation *anAnnotation in [clusteredAnnotations allValues]) {
         if ([anAnnotation.annotationsInCluster count] <= 1) {
             [returnArray addObject:[anAnnotation.annotationsInCluster lastObject]];
         }
@@ -157,11 +189,43 @@
         }
     }
     
-    // memory
-    [annotationsToCluster release];
-    [clusteredAnnotations release];
-    
-    return [returnArray autorelease];
+    return returnArray;
+}
+
++ (NSString*) localizedDistanceStringFromKilometers:(CLLocationDistance)kilometers lessThanKilometerAccuracy:(BOOL)lessThanKilometerAccuracy {
+    NSString *distanceString = @"";
+    if ([[[NSUserDefaults standardUserDefaults] objectForKey:@"Metric"] boolValue]) {
+        if (kilometers >= 1||lessThanKilometerAccuracy) {
+            if (lessThanKilometerAccuracy) {
+                distanceString = [NSString stringWithFormat:@"%.1f%@", kilometers, @"km"];
+            } else {
+                distanceString = [NSString stringWithFormat:@"%.0f%@", kilometers, @"km"];
+            }
+        } else {
+            if (kilometers == 0) {
+                distanceString = @"";
+            } else {
+                distanceString = [NSString stringWithFormat:@"0-1km"];
+            }
+        }
+    } else {
+        CLLocationDistance miles = kilometers*0.621371192;
+        if (miles >= 1||lessThanKilometerAccuracy) {
+            if (lessThanKilometerAccuracy) {
+                distanceString = [NSString stringWithFormat:@"%.1f%@", miles, @"mi"];
+            } else {
+                distanceString = [NSString stringWithFormat:@"%.0f%@", miles, @"mi"];
+            }
+        } else {
+            if (miles == 0) {
+                distanceString = @"";
+            } else {
+                distanceString = [NSString stringWithFormat:@"0-1mi"];
+            }
+        }
+        
+    }
+    return distanceString;
 }
 
 @end

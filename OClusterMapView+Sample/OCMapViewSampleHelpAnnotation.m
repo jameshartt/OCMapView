@@ -21,12 +21,6 @@
     return self;
 }
 
-- (void)dealloc {
-    [title release];
-    [subtitle release];
-    
-    [super dealloc];
-}
 
 // Properties
 - (NSString *)title{
@@ -34,8 +28,6 @@
 }
 
 - (void)setTitle:(NSString *)text{
-    [text retain];
-    [title release];
     title = text;
 }
 
@@ -44,8 +36,6 @@
 }
 
 - (void)setSubtitle:(NSString *)text{
-    [text retain];
-    [subtitle release];
     subtitle = text;
 }
 
@@ -54,8 +44,6 @@
 }
 
 - (void)setGroupTag:(NSString *)tag{
-    [tag retain];
-    [_groupTag release];
     _groupTag = tag;
 }
 
